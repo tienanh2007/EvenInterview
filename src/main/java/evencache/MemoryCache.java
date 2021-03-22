@@ -65,7 +65,7 @@ public class MemoryCache<T> implements Cache<T> {
         this.mostRecentlyReadKeys.remove(key);
         this.mostRecentlyReadKeys.addLast(key);
 
-        return new CacheResult(false, item.value);
+        return new CacheResult(true, item.value);
     }
 
     /**
@@ -93,12 +93,12 @@ public class MemoryCache<T> implements Cache<T> {
         // Add item.
         // TODO: Store expiry too, and clear when expired.
         Item item = new Item(key, value);
-        this.mostRecentlyReadKeys.addFirst(key);
+        this.mostRecentlyReadKeys.addLast(key);
         this.itemsByKey.put(key, item);
 
         // If we're over capacity, evict least recently read items.
         while (this.maxItems > 0 && this.itemsByKey.size() > this.maxItems) {
-            String oldestKey = this.mostRecentlyReadKeys.getLast();
+            String oldestKey = this.mostRecentlyReadKeys.getFirst();
             this.clear(oldestKey);
         }
     }
