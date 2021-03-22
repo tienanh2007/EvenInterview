@@ -1,5 +1,10 @@
 package evencache;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
@@ -21,7 +26,8 @@ public class MemoryCache<T> implements Cache<T> {
     // while the map allows us to look items up by key quickly.
     private final LinkedList<String> mostRecentlyReadKeys;
     private final Map<String, Item> itemsByKey;
-
+    private final Map<String, Long> expirationByKey;
+    private final int TIME_BUFFER = 1000;
     // Internally, we wrap values to support additional metadata.
     private class Item {
         final String key;
@@ -41,6 +47,7 @@ public class MemoryCache<T> implements Cache<T> {
         this.maxItems = maxItems;
         this.mostRecentlyReadKeys = new LinkedList<>();
         this.itemsByKey = new HashMap<>();
+        this.expirationByKey = new HashMap<>();
     }
 
     /**
@@ -55,6 +62,10 @@ public class MemoryCache<T> implements Cache<T> {
 
         // Do we have this key in the cache?
         if (!this.itemsByKey.containsKey(key)) {
+            return new CacheResult(false, null);
+        }
+
+        if(this.expirationByKey.get(key) > System.currentTimeMillis() + TIME_BUFFER) {
             return new CacheResult(false, null);
         }
         Item item = this.itemsByKey.get(key);
@@ -75,8 +86,8 @@ public class MemoryCache<T> implements Cache<T> {
      * @param value value to cache under the given key
      */
     @Override
-    public void set(String key, T value) {
-        this.set(key, value, 0);
+    public CountDownLatch set(String key, T value) {
+        return this.set(key, value, -1);
     }
 
     /**
@@ -89,18 +100,38 @@ public class MemoryCache<T> implements Cache<T> {
      *                      or 0 to never expire
      */
     @Override
-    public synchronized void set(String key, T value, long expireAfterMS) {
+    public synchronized CountDownLatch set(String key, T value, long expireAfterMS) {
         // Add item.
         // TODO: Store expiry too, and clear when expired.
         Item item = new Item(key, value);
         this.mostRecentlyReadKeys.addLast(key);
         this.itemsByKey.put(key, item);
-
+        this.expirationByKey.put(key, System.currentTimeMillis()+expireAfterMS);
         // If we're over capacity, evict least recently read items.
         while (this.maxItems > 0 && this.itemsByKey.size() > this.maxItems) {
             String oldestKey = this.mostRecentlyReadKeys.getFirst();
             this.clear(oldestKey);
         }
+
+        return this.timedRemove(key, expireAfterMS);
+    }
+
+    private synchronized CountDownLatch timedRemove(String key, long expireAfterMS) {
+      final CountDownLatch latch = new CountDownLatch(1);
+      if(expireAfterMS >= 0) {
+        ScheduledExecutorService scheduler
+                            = Executors.newSingleThreadScheduledExecutor();
+        Runnable removeTask = new Runnable() {
+            public void run() {
+                clear(key);
+                latch.countDown();
+                System.out.println(key + "was removed from the cache after" + expireAfterMS + "Milliseconds");
+            }
+        };
+        scheduler.schedule(removeTask, expireAfterMS, TimeUnit.MILLISECONDS);
+        return latch;
+      }
+      return null;
     }
 
     /**

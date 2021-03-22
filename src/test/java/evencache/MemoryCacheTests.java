@@ -8,6 +8,9 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.CountDownLatch;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
@@ -135,8 +138,74 @@ class MemoryCacheTests {
      * TODO: Test expiry.
      */
     @Test
-    @Disabled
-    void expiry() {
-        // TODO: Implement!
+    void expiryAfterOneSecond() throws InterruptedException {
+        MemoryCache<String> cache = new MemoryCache(3);
+
+        String a = "A";
+        String b = "B";
+        String c = "C";
+
+        CountDownLatch aLatch = cache.set("a", a, 1000);
+        CountDownLatch bLatch = cache.set("b", b, 1000);
+        CountDownLatch cLatch = cache.set("c", c, 1000);
+
+        assertCachedEquals(cache, "a", a);
+        assertCachedEquals(cache, "b", b);
+        assertCachedEquals(cache, "c", c);
+
+        aLatch.await();
+        bLatch.await();
+        cLatch.await();
+
+        assertNotInCache(cache, "a");
+        assertNotInCache(cache, "b");
+        assertNotInCache(cache, "c");
+
     }
+
+    @Test
+    void expiryAfterOneSecondExceptOne() throws InterruptedException {
+        MemoryCache<String> cache = new MemoryCache(3);
+
+        String a = "A";
+        String b = "B";
+        String c = "C";
+
+        CountDownLatch aLatch = cache.set("a", a, 1000);
+        CountDownLatch bLatch = cache.set("b", b, 1000);
+        CountDownLatch cLatch = cache.set("c", c, 0);
+
+        assertCachedEquals(cache, "a", a);
+        assertCachedEquals(cache, "b", b);
+        assertNotInCache(cache, "c");
+
+        aLatch.await();
+        bLatch.await();
+
+        assertNotInCache(cache, "a");
+        assertNotInCache(cache, "b");
+        assertNotInCache(cache, "c");
+
+    }
+
+    
+    @Test
+    void expiryNeverExpire() throws InterruptedException {
+        MemoryCache<String> cache = new MemoryCache(3);
+
+        String a = "A";
+        String b = "B";
+        String c = "C";
+
+        cache.set("a", a);
+        cache.set("b", b);
+        cache.set("c", c);
+
+        assertCachedEquals(cache, "a", a);
+        assertCachedEquals(cache, "b", b);
+        assertCachedEquals(cache, "b", b);
+
+    }
+
+
 }

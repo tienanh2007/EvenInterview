@@ -1,5 +1,7 @@
 package evencache;
 
+import java.util.concurrent.CountDownLatch;
+
 public interface Cache<T> {
 
     /**
@@ -17,7 +19,7 @@ public interface Cache<T> {
      * @param key   cache key
      * @param value value to cache under the given key
      */
-    void set(String key, T value);
+    CountDownLatch set(String key, T value);
 
     /**
      * Caches the given value (which may be null) under the given key
@@ -28,7 +30,7 @@ public interface Cache<T> {
      * @param expireAfterMS duration after which value should expire,
      *                      or 0 to never expire
      */
-    void set(String key, T value, long expireAfterMS);
+    CountDownLatch set(String key, T value, long expireAfterMS);
 
     /**
      * Clears the value, if any, cached under the given key.
